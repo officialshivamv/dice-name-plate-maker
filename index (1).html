@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tent Card Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* Layout: two-pane workbench — list + settings on the left, live sheet of cards on the right; stacks on phones */
+:root{
+  --bg:#eef0ee; --panel:#ffffff; --ink:#1d2321; --muted:#5d6763; --line:#d5dad7;
+  --accent:#0f6b5c; --accent-ink:#ffffff; --guide:#b7c2bd; --fold:#0f6b5c; --warn:#9a5b00; --warn-bg:#fff3df;
+  --card:#ffffff; --card-ink:#000000;
+  --ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141917; --panel:#1c2220; --ink:#e4e9e6; --muted:#9aa5a0; --line:#2f3835;
+  --accent:#4fb8a3; --accent-ink:#0c1412; --guide:#55625d; --fold:#4fb8a3; --warn:#f0b35a; --warn-bg:#3a2b12;
+  --card:#ffffff; --card-ink:#000000; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141917; --panel:#1c2220; --ink:#e4e9e6; --muted:#9aa5a0; --line:#2f3835;
+  --accent:#4fb8a3; --accent-ink:#0c1412; --guide:#55625d; --fold:#4fb8a3; --warn:#f0b35a; --warn-bg:#3a2b12;
+  --card:#ffffff; --card-ink:#000000; color-scheme:dark}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.5;padding-inline:16px;padding-block:20px 40px}
+.wrap{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:860px){.wrap{grid-template-columns:minmax(0,1fr)}}
+header{max-width:1280px;margin:0 auto 18px;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:baseline;justify-content:space-between}
+h1{font-size:22px;font-weight:600;margin:0;text-wrap:balance}
+.spec{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:14px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:860px){.panel{position:static}}
+label.h{font-weight:600;font-size:13px;display:block;margin-bottom:6px}
+.hint{color:var(--muted);font-size:12px;margin:6px 0 0}
+textarea{width:100%;min-height:210px;resize:vertical;font-family:var(--mono);font-size:12.5px;line-height:1.55;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);tab-size:4}
+textarea:focus-visible,select:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.row>*{flex:1 1 140px;min-width:0}
+select,input[type=number]{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);font:inherit}
+.seg{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;color:var(--ink);font:inherit;font-size:13px;padding:7px 6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn{border:0;border-radius:4px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;padding:11px 14px;cursor:pointer;width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.status{font-size:12.5px;color:var(--muted);min-height:1.2em;margin:0}
+.sheet{display:flex;flex-direction:column;gap:18px;min-width:0}
+.sheet-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;color:var(--muted);font-size:13px}
+.card{display:flex;flex-direction:column;gap:6px;min-width:0}
+.card-meta{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12.5px;color:var(--muted)}
+.card-meta b{color:var(--ink);font-weight:600}
+.pill{font-family:var(--mono);font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line)}
+.pill.shrunk{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+svg.plate{width:100%;height:auto;display:block;background:var(--card);border-radius:2px;box-shadow:0 1px 0 var(--line),0 0 0 1px var(--line)}
+.empty{border:1px dashed var(--line);border-radius:6px;padding:28px;text-align:center;color:var(--muted)}
+.tog{display:flex;gap:8px;align-items:center;font-size:13px}
+</style>
+</head>
+<body>
+
+
+<header>
+  <h1>Tent Card Maker</h1>
+  <span class="spec">22 × 10 cm · margins 2 cm L/R, 1 cm T/B · fold at 5 cm</span>
+</header>
+
+<div class="wrap">
+  <form class="panel" id="controls" autocomplete="off">
+    <div>
+      <label class="h" for="list">Names</label>
+      <textarea id="list" spellcheck="false"></textarea>
+      <p class="hint">One card per line, name and title separated by a Tab (paste straight from Excel or Sheets). Lines without a Tab are read in pairs: name, then title.</p>
+    </div>
+    <div>
+      <label class="h">Column order</label>
+      <div class="seg" role="group" aria-label="Column order">
+        <button type="button" id="ordNF" aria-pressed="true">Name, then title</button>
+        <button type="button" id="ordTF" aria-pressed="false">Title, then name</button>
+      </div>
+    </div>
+    <div>
+      <label class="h">Font</label>
+      <div class="seg" role="group" aria-label="Font">
+        <button type="button" id="fArial" aria-pressed="true">Arial Bold</button>
+        <button type="button" id="fTimes" aria-pressed="false">Times Bold</button>
+      </div>
+    </div>
+    <div class="row">
+      <div><label class="h" for="nameSize">Name size (pt)</label><input type="number" id="nameSize" min="20" max="100" step="1"></div>
+      <div><label class="h" for="titleSize">Title size (pt)</label><input type="number" id="titleSize" min="12" max="60" step="1"></div>
+    </div>
+    <label class="tog"><input type="checkbox" id="guides" checked> Show margin guides in preview</label>
+    <button type="button" class="btn" id="dl">Download PDF</button>
+    <p class="status" id="status" role="status"></p>
+  </form>
+
+  <section class="sheet" aria-label="Preview">
+    <div class="sheet-head"><span id="count"></span><span>Long names shrink automatically to stay inside the margins</span></div>
+    <div id="cards" class="sheet"></div>
+  </section>
+</div>
+
+<script>
+const PAGE_W=220, PAGE_H=100, MARGIN_X=20, MARGIN_Y=10, MAXW=174; // mm; MAXW leaves 3 mm breathing room each side
+const PT=25.4/72;
+const FONTS={
+  arial:{pdf:"helvetica",css:"Arial,'Liberation Sans',Helvetica,sans-serif",name:62,title:36},
+  times:{pdf:"times",css:"'Times New Roman',Times,'Liberation Serif',serif",name:67,title:38}
+};
+const SAMPLE="Dr. P.R. Sodani\tPresident, IIHMR University\nMr. Rajneesh Bhandari\tSerial Entrepreneur & Angel Investor\nMr. Amrit Tiwari\tIIML EIC";
+const S={font:"arial",order:"nf",nameSize:62,titleSize:36,guides:true};
+const $=id=>document.getElementById(id);
+
+function load(){try{const v=JSON.parse(localStorage.getItem("tcm")||"null");if(v){Object.assign(S,v.s||{});$("list").value=v.list??SAMPLE;return}}catch(e){}$("list").value=SAMPLE}
+function save(){try{localStorage.setItem("tcm",JSON.stringify({s:S,list:$("list").value}))}catch(e){}}
+
+let measureDoc=null;
+function widthMM(text,pt){
+  const f=FONTS[S.font];
+  if(window.jspdf){
+    if(!measureDoc)measureDoc=new window.jspdf.jsPDF({unit:"mm",format:[PAGE_W,PAGE_H],orientation:"landscape"});
+    measureDoc.setFont(f.pdf,"bold");
+    return measureDoc.getStringUnitWidth(text)*pt*PT;
+  }
+  const c=widthMM.c||(widthMM.c=document.createElement("canvas").getContext("2d"));
+  c.font=`bold 100px ${f.css}`;return c.measureText(text).width/100*pt*PT;
+}
+function fit(text,base){const w=widthMM(text,1);return w?Math.min(base,Math.floor(MAXW/w)):base}
+
+function parse(){
+  const lines=$("list").value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const out=[];
+  if(lines.some(l=>l.includes("\t"))){
+    for(const l of lines){const [a,b=""]=l.split("\t").map(s=>s.trim());out.push(S.order==="nf"?[a,b]:[b,a]);}
+  }else{
+    for(let i=0;i<lines.length;i+=2){const a=lines[i],b=lines[i+1]||"";out.push(S.order==="nf"?[a,b]:[b,a]);}
+  }
+  return out.filter(([n,t])=>n||t).map(([name,title])=>({name,title,np:fit(name,S.nameSize),tp:fit(title,S.titleSize)}));
+}
+// baselines (mm from page top) for the upright bottom half
+function baselines(c){const tb=PAGE_H-MARGIN_Y-c.tp*0.18*PT;const nb=tb-(c.title?c.tp*1.3*PT:0);return{tb,nb}}
+
+const esc=s=>s.replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+function svgFor(c){
+  const f=FONTS[S.font],{tb,nb}=baselines(c);
+  const half=`<text x="110" y="${nb.toFixed(2)}" font-size="${(c.np*PT).toFixed(2)}">${esc(c.name)}</text>`+
+    (c.title?`<text x="110" y="${tb.toFixed(2)}" font-size="${(c.tp*PT).toFixed(2)}">${esc(c.title)}</text>`:"");
+  const g=S.guides?`<g stroke="var(--guide)" stroke-width=".3" stroke-dasharray="1.5 1.5" fill="none">
+    <rect x="${MARGIN_X}" y="${MARGIN_Y}" width="${PAGE_W-2*MARGIN_X}" height="${PAGE_H-2*MARGIN_Y}"/></g>
+    <line x1="0" y1="50" x2="220" y2="50" stroke="var(--fold)" stroke-width=".35" stroke-dasharray="3 2"/>`:"";
+  return `<svg class="plate" viewBox="0 0 220 100" role="img" aria-label="Tent card for ${esc(c.name)}">${g}
+    <g font-family="${f.css.replace(/"/g,"'")}" font-weight="700" text-anchor="middle" fill="var(--card-ink)">
+      <g transform="rotate(180 110 50)">${half}</g>${half}</g></svg>`;
+}
+
+function render(){
+  const cards=parse();const box=$("cards");
+  $("count").textContent=cards.length?`${cards.length} card${cards.length>1?"s":""} · one per page`:"";
+  $("dl").disabled=!cards.length;
+  if(!cards.length){box.innerHTML='<div class="empty">Paste names on the left to see the cards here.</div>';return}
+  box.innerHTML=cards.map((c,i)=>{
+    const sN=c.np<S.nameSize,sT=c.title&&c.tp<S.titleSize;
+    return `<div class="card"><div class="card-meta"><b>${i+1}. ${esc(c.name||"(no name)")}</b>
+      <span class="pill${sN?" shrunk":""}">name ${c.np} pt</span>${c.title?`<span class="pill${sT?" shrunk":""}">title ${c.tp} pt</span>`:""}</div>${svgFor(c)}</div>`}).join("");
+}
+
+function buildPDF(){
+  const {jsPDF}=window.jspdf;const f=FONTS[S.font];
+  const doc=new jsPDF({unit:"mm",format:[PAGE_W,PAGE_H],orientation:"landscape"});
+  parse().forEach((c,i)=>{
+    if(i)doc.addPage([PAGE_W,PAGE_H],"landscape");
+    doc.setFont(f.pdf,"bold");doc.setTextColor(0,0,0);
+    const {tb,nb}=baselines(c);
+    const put=(txt,pt,y)=>{if(!txt)return;doc.setFontSize(pt);const w=doc.getTextWidth(txt);
+      doc.text(txt,PAGE_W/2-w/2,y);                                   // upright bottom half
+      doc.text(txt,PAGE_W/2+w/2,PAGE_H-y,{angle:180});};              // flipped top half
+    put(c.name,c.np,nb);put(c.title,c.tp,tb);
+  });
+  return doc;
+}
+
+$("dl").addEventListener("click",()=>{
+  if(!window.jspdf){$("status").textContent="The PDF library didn't load. Check your internet connection and reload.";return}
+  const cards=parse();
+  const fname="Tent_Cards_"+(cards.length===1?cards[0].name.replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,""):cards.length+"_cards")+".pdf";
+  try{buildPDF().save(fname);$("status").textContent="Saved "+fname;}catch(e){$("status").textContent="Couldn't create the PDF.";}
+});
+
+function syncUI(){
+  $("ordNF").setAttribute("aria-pressed",S.order==="nf");$("ordTF").setAttribute("aria-pressed",S.order==="tf");
+  $("fArial").setAttribute("aria-pressed",S.font==="arial");$("fTimes").setAttribute("aria-pressed",S.font==="times");
+  $("nameSize").value=S.nameSize;$("titleSize").value=S.titleSize;$("guides").checked=S.guides;
+}
+function update(){syncUI();render();save()}
+$("ordNF").onclick=()=>{S.order="nf";update()};$("ordTF").onclick=()=>{S.order="tf";update()};
+$("fArial").onclick=()=>{S.font="arial";S.nameSize=FONTS.arial.name;S.titleSize=FONTS.arial.title;update()};
+$("fTimes").onclick=()=>{S.font="times";S.nameSize=FONTS.times.name;S.titleSize=FONTS.times.title;update()};
+$("nameSize").oninput=e=>{const v=+e.target.value;if(v>=10){S.nameSize=v;render();save()}};
+$("titleSize").oninput=e=>{const v=+e.target.value;if(v>=8){S.titleSize=v;render();save()}};
+$("guides").onchange=e=>{S.guides=e.target.checked;render();save()};
+$("list").addEventListener("input",()=>{render();save()});
+$("controls").addEventListener("submit",e=>e.preventDefault());
+
+load();syncUI();render();
+</script>
+
+</body>
+</html>
